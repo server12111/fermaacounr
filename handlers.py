@@ -159,9 +159,7 @@ def build_router(
             await callback.message.answer("⏳ Выполняю команду…")
 
         async def worker() -> None:
-            status = await scheduler.run_one(account_id)
-            if callback.message:
-                await callback.message.answer(status)
+            await scheduler.run_one(account_id)
 
         asyncio.create_task(worker())
 

@@ -255,6 +255,8 @@ class FarmScheduler:
             for account in await self.db.list_accounts(enabled_only=True):
                 if account.id in self._running:
                     continue
+                if account.available_from and datetime.fromisoformat(account.available_from) > now:
+                    continue
                 due = self.config.farm_enabled and (
                     account.next_run is None or datetime.fromisoformat(account.next_run) <= now
                 )

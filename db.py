@@ -59,6 +59,20 @@ class Database:
                 await conn.execute("ALTER TABLE accounts ADD COLUMN stall_next_run TEXT")
             if "stall_status" not in columns:
                 await conn.execute("ALTER TABLE accounts ADD COLUMN stall_status TEXT")
+            # Заполняем задержку для аккаунтов, добавленных до появления поля.
+            rows = await (
+                await conn.execute(
+                    "SELECT id, created_at FROM accounts WHERE available_from IS NULL"
+                )
+            ).fetchall()
+            for account_id, created_at in rows:
+                created = datetime.fromisoformat(created_at)
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=UTC)
+                await conn.execute(
+                    "UPDATE accounts SET available_from = ? WHERE id = ?",
+                    ((created + timedelta(hours=1)).isoformat(), account_id),
+                )
             await conn.commit()
 
     @staticmethod
