@@ -138,20 +138,24 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 if message.id < sent.id:
                     continue
                 timer_text += f" {message.raw_text or ''}"
-                if not message.buttons or clicked:
-                    continue
-                for row_index, row in enumerate(message.buttons):
-                    for button_index, button in enumerate(row):
-                        if "бонус" in (button.text or "").strip().casefold():
-                            await message.click(row_index, button_index)
-                            clicked = True
+                if not clicked and message.buttons:
+                    for row_index, row in enumerate(message.buttons):
+                        for button_index, button in enumerate(row):
+                            if "бонус" in (button.text or "").strip().casefold():
+                                await message.click(row_index, button_index)
+                                clicked = True
+                                break
+                        if clicked:
                             break
-                    if clicked:
-                        break
-            if clicked and _timer_seconds(timer_text) is not None:
-                wait = _timer_seconds(timer_text) or 0
-                return "✅ бонус нажат", wait + config.bonus_extra_seconds
-        raise RuntimeError("кнопка «Бонус» или таймер не найдены за 35 секунд")
+
+            # Бот может вернуть только текст таймера без кнопки (например,
+            # «Следующий бонус будет доступен через 1:16»). В этом случае
+            # кнопку нажимать не нужно — следующий запуск назначается по тексту.
+            wait = _timer_seconds(timer_text)
+            if wait is not None:
+                result = "✅ кнопка «Бонус» нажата" if clicked else "✅ таймер бонуса считан"
+                return result, wait + config.bonus_extra_seconds
+        raise RuntimeError("после команды «бонус» не найдены кнопка или сообщение с таймером за 35 секунд")
     except FloodWaitError as exc:
         raise SafetyBlockError(
             "временный спам-блок",
