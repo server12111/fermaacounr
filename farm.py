@@ -54,12 +54,11 @@ def _timer_seconds(text: str) -> int | None:
     return total
 
 
-async def _click_bonus_button(client: TelegramClient, message, row_index: int, button_index: int) -> None:
+async def _click_bonus_button(client: TelegramClient, message, row_index: int, button_index: int):
     button = message.buttons[row_index][button_index]
     url = getattr(button, "url", None)
     if not url:
-        await message.click(row_index, button_index)
-        return
+        return await message.click(row_index, button_index)
 
     # URL-кнопки t.me не вызывают callback при message.click(). Эмулируем
     # переход по deep-link через StartBotRequest, чтобы бонусный бот получил
@@ -71,14 +70,15 @@ async def _click_bonus_button(client: TelegramClient, message, row_index: int, b
         start_param = (query.get("start") or query.get("startgroup") or [""])[0]
         if username:
             bot = await client.get_entity(username)
-            await client(functions.messages.StartBotRequest(
+            peer = await message.get_input_chat()
+            return await client(functions.messages.StartBotRequest(
                 bot=bot,
-                peer=bot,
+                peer=peer,
                 start_param=start_param,
             ))
             return
     # Для иных URL оставляем стандартное поведение Telethon.
-    await button.click()
+    return await button.click()
 
 
 class SessionCipher:
@@ -168,13 +168,13 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 # Бонусный бот может редактировать старое сообщение вместо
                 # отправки нового. Учитываем edit_date такого сообщения.
                 message_activity = message.edit_date or message.date
-                if message.id < sent.id and message_activity <= sent.date:
-                    continue
                 sender = await message.get_sender()
                 sender_username = (getattr(sender, "username", "") or "").casefold()
                 message_text = message.raw_text or ""
                 is_gram_by_text = "gram" in message_text.casefold() or "баланс" in message_text.casefold()
-                if sender_username != config.bonus_bot_username and not is_gram_by_text and not clicked:
+                is_gram = sender_username == config.bonus_bot_username or is_gram_by_text
+                is_after_command = message.id >= sent.id or message_activity > sent.date
+                if not is_gram or (not is_after_command and not message.buttons):
                     continue
                 logging.getLogger(__name__).info(
                     "bonus response: id=%s sender=%s text=%r buttons=%s",
@@ -183,14 +183,18 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                     message_text[:300],
                     [button.text for row in (message.buttons or []) for button in row],
                 )
-                timer_text += f" {message_text}"
+                if is_after_command:
+                    timer_text += f" {message_text}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
                             label = (button.text or "").strip().casefold()
                             if "бонус" in label:
-                                await _click_bonus_button(client, message, row_index, button_index)
+                                callback_result = await _click_bonus_button(client, message, row_index, button_index)
                                 clicked = True
+                                callback_text = getattr(callback_result, "message", None)
+                                if isinstance(callback_text, str):
+                                    timer_text += f" {callback_text}"
                                 break
                         if clicked:
                             break
@@ -202,6 +206,8 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
             if wait is not None:
                 result = "✅ кнопка «Бонус» нажата" if clicked else "✅ таймер бонуса считан"
                 return result, wait + config.bonus_extra_seconds
+            if clicked:
+                return "✅ кнопка «Бонус» нажата; таймер в ответе не передан", config.bonus_fallback_seconds
         raise RuntimeError(
             f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 35 секунд"
         )
