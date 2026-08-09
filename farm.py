@@ -135,13 +135,17 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
             await asyncio.sleep(2)
             messages = await client.get_messages(target, limit=20)
             for message in messages:
-                if message.id < sent.id:
+                # Бонусный бот может редактировать старое сообщение вместо
+                # отправки нового. Учитываем edit_date такого сообщения.
+                message_activity = message.edit_date or message.date
+                if message.id < sent.id and message_activity <= sent.date:
                     continue
                 timer_text += f" {message.raw_text or ''}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
-                            if "бонус" in (button.text or "").strip().casefold():
+                            label = (button.text or "").strip().casefold()
+                            if any(word in label for word in ("бонус", "получ", "забрат", "claim")):
                                 await message.click(row_index, button_index)
                                 clicked = True
                                 break
