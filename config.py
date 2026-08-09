@@ -19,6 +19,7 @@ class Config:
     farm_enabled: bool
     bonus_chat: str
     bonus_command: str
+    bonus_bot_username: str
     bonus_extra_seconds: int
     stall_command: str
     stall_button: str
@@ -63,6 +64,7 @@ def load_config() -> Config:
         farm_enabled=os.getenv("FARM_ENABLED", "false").casefold() in {"1", "true", "yes", "on"},
         bonus_chat=os.getenv("BONUS_CHAT", "https://t.me/piar_grames"),
         bonus_command=os.getenv("BONUS_COMMAND", "б"),
+        bonus_bot_username=os.getenv("BONUS_BOT_USERNAME", "valyutaTG_bot").lstrip("@").casefold(),
         bonus_extra_seconds=int(os.getenv("BONUS_EXTRA_MINUTES", "5")) * 60,
         stall_command=os.getenv("STALL_COMMAND", "ларек"),
         stall_button=os.getenv("STALL_BUTTON", "собрать"),

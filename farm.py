@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import re
+from urllib.parse import parse_qs, urlparse
 from datetime import UTC, datetime, timedelta
 from typing import Awaitable, Callable
 
 from cryptography.fernet import Fernet, InvalidToken
 from telethon import TelegramClient
+from telethon import functions
 from telethon.errors import (
     FloodWaitError,
     PeerFloodError,
@@ -49,6 +51,33 @@ def _timer_seconds(text: str) -> int | None:
     if minutes:
         total += int(minutes.group(1)) * 60
     return total
+
+
+async def _click_bonus_button(client: TelegramClient, message, row_index: int, button_index: int) -> None:
+    button = message.buttons[row_index][button_index]
+    url = getattr(button, "url", None)
+    if not url:
+        await message.click(row_index, button_index)
+        return
+
+    # URL-кнопки t.me не вызывают callback при message.click(). Эмулируем
+    # переход по deep-link через StartBotRequest, чтобы бонусный бот получил
+    # тот же параметр, что и при обычном нажатии пользователем.
+    parsed = urlparse(url)
+    if parsed.netloc.casefold() in {"t.me", "telegram.me"}:
+        username = parsed.path.strip("/").split("/", 1)[0]
+        query = parse_qs(parsed.query)
+        start_param = (query.get("start") or query.get("startgroup") or [""])[0]
+        if username:
+            bot = await client.get_entity(username)
+            await client(functions.messages.StartBotRequest(
+                bot=bot,
+                peer=bot,
+                start_param=start_param,
+            ))
+            return
+    # Для иных URL оставляем стандартное поведение Telethon.
+    await button.click()
 
 
 class SessionCipher:
@@ -140,13 +169,17 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 message_activity = message.edit_date or message.date
                 if message.id < sent.id and message_activity <= sent.date:
                     continue
+                sender = await message.get_sender()
+                sender_username = (getattr(sender, "username", "") or "").casefold()
+                if sender_username and sender_username != config.bonus_bot_username:
+                    continue
                 timer_text += f" {message.raw_text or ''}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
                             label = (button.text or "").strip().casefold()
                             if any(word in label for word in ("бонус", "получ", "забрат", "claim")):
-                                await message.click(row_index, button_index)
+                                await _click_bonus_button(client, message, row_index, button_index)
                                 clicked = True
                                 break
                         if clicked:
