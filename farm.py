@@ -169,12 +169,16 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 message_activity = message.edit_date or message.date
                 if message.id < sent.id and message_activity <= sent.date:
                     continue
+                sender = await message.get_sender()
+                sender_username = (getattr(sender, "username", "") or "").casefold()
+                if sender_username != config.bonus_bot_username:
+                    continue
                 timer_text += f" {message.raw_text or ''}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
                             label = (button.text or "").strip().casefold()
-                            if any(word in label for word in ("бонус", "получ", "забрат", "claim")):
+                            if "бонус" in label:
                                 await _click_bonus_button(client, message, row_index, button_index)
                                 clicked = True
                                 break
