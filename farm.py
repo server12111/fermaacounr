@@ -54,6 +54,19 @@ def _timer_seconds(text: str) -> int | None:
     return total
 
 
+def _result_text(result) -> str:
+    texts: list[str] = []
+    direct = getattr(result, "message", None)
+    if isinstance(direct, str):
+        texts.append(direct)
+    for update in getattr(result, "updates", []) or []:
+        message = getattr(update, "message", None)
+        text = getattr(message, "message", None) or getattr(message, "raw_text", None)
+        if isinstance(text, str):
+            texts.append(text)
+    return " ".join(texts)
+
+
 async def _click_bonus_button(client: TelegramClient, message, row_index: int, button_index: int):
     button = message.buttons[row_index][button_index]
     url = getattr(button, "url", None)
@@ -160,6 +173,7 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
         sent = await client.send_message(target, config.bonus_command)
         deadline = asyncio.get_running_loop().time() + 60
         clicked = False
+        clicked_at = None
         timer_text = ""
         while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(2)
@@ -192,9 +206,8 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                             if "бонус" in label:
                                 callback_result = await _click_bonus_button(client, message, row_index, button_index)
                                 clicked = True
-                                callback_text = getattr(callback_result, "message", None)
-                                if isinstance(callback_text, str):
-                                    timer_text += f" {callback_text}"
+                                clicked_at = datetime.now(UTC)
+                                timer_text += f" {_result_text(callback_result)}"
                                 break
                         if clicked:
                             break
@@ -207,6 +220,18 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 result = "✅ кнопка «Бонус» нажата" if clicked else "✅ таймер бонуса считан"
                 return result, wait + config.bonus_extra_seconds
             if clicked:
+                # При deep-link кнопке ответ часто приходит в личный чат
+                # valyutaTG_bot, а не в piar_grames.
+                bot_entity = await client.get_entity(config.bonus_bot_username)
+                private_messages = await client.get_messages(bot_entity, limit=10)
+                for private_message in private_messages:
+                    private_activity = private_message.edit_date or private_message.date
+                    if clicked_at and private_activity < clicked_at:
+                        continue
+                    timer_text += f" {private_message.raw_text or ''}"
+                wait = _timer_seconds(timer_text)
+                if wait is not None:
+                    return "✅ кнопка «Бонус» нажата, таймер считан из ответа бота", wait + config.bonus_extra_seconds
                 return "✅ кнопка «Бонус» нажата; таймер в ответе не передан", config.bonus_fallback_seconds
         raise RuntimeError(
             f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 35 секунд"
