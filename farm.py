@@ -83,10 +83,9 @@ async def _click_bonus_button(client: TelegramClient, message, row_index: int, b
         start_param = (query.get("start") or query.get("startgroup") or [""])[0]
         if username:
             bot = await client.get_entity(username)
-            peer = await message.get_input_chat()
             return await client(functions.messages.StartBotRequest(
                 bot=bot,
-                peer=peer,
+                peer=bot,
                 start_param=start_param,
             ))
             return
