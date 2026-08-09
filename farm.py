@@ -231,9 +231,13 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 wait = _timer_seconds(timer_text)
                 if wait is not None:
                     return "✅ кнопка «Бонус» нажата, таймер считан из ответа бота", wait + config.bonus_extra_seconds
-                return "✅ кнопка «Бонус» нажата; таймер в ответе не передан", config.bonus_fallback_seconds
+                # Ответ в личном чате может прийти с задержкой; продолжаем
+                # polling до общего дедлайна, а не завершаем попытку сразу.
+                continue
+        if clicked:
+            return "✅ кнопка «Бонус» нажата; таймер в ответе не передан", config.bonus_fallback_seconds
         raise RuntimeError(
-            f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 35 секунд"
+            f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 60 секунд"
         )
     except FloodWaitError as exc:
         raise SafetyBlockError(
