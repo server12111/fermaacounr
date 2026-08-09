@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from urllib.parse import parse_qs, urlparse
 from datetime import UTC, datetime, timedelta
@@ -157,7 +158,7 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
             raise RuntimeError("сессия аккаунта завершена — добавьте аккаунт заново")
         target = await client.get_entity(config.bonus_chat)
         sent = await client.send_message(target, config.bonus_command)
-        deadline = asyncio.get_running_loop().time() + 35
+        deadline = asyncio.get_running_loop().time() + 60
         clicked = False
         timer_text = ""
         while asyncio.get_running_loop().time() < deadline:
@@ -171,9 +172,18 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                     continue
                 sender = await message.get_sender()
                 sender_username = (getattr(sender, "username", "") or "").casefold()
-                if sender_username != config.bonus_bot_username:
+                message_text = message.raw_text or ""
+                is_gram_by_text = "gram" in message_text.casefold() or "баланс" in message_text.casefold()
+                if sender_username != config.bonus_bot_username and not is_gram_by_text and not clicked:
                     continue
-                timer_text += f" {message.raw_text or ''}"
+                logging.getLogger(__name__).info(
+                    "bonus response: id=%s sender=%s text=%r buttons=%s",
+                    message.id,
+                    sender_username or "<hidden>",
+                    message_text[:300],
+                    [button.text for row in (message.buttons or []) for button in row],
+                )
+                timer_text += f" {message_text}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
