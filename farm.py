@@ -169,10 +169,6 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 message_activity = message.edit_date or message.date
                 if message.id < sent.id and message_activity <= sent.date:
                     continue
-                sender = await message.get_sender()
-                sender_username = (getattr(sender, "username", "") or "").casefold()
-                if sender_username and sender_username != config.bonus_bot_username:
-                    continue
                 timer_text += f" {message.raw_text or ''}"
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
@@ -192,7 +188,9 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
             if wait is not None:
                 result = "✅ кнопка «Бонус» нажата" if clicked else "✅ таймер бонуса считан"
                 return result, wait + config.bonus_extra_seconds
-        raise RuntimeError("после команды «бонус» не найдены кнопка или сообщение с таймером за 35 секунд")
+        raise RuntimeError(
+            f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 35 секунд"
+        )
     except FloodWaitError as exc:
         raise SafetyBlockError(
             "временный спам-блок",
