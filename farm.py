@@ -213,7 +213,7 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
             # «Следующий бонус будет доступен через 1:16»). В этом случае
             # кнопку нажимать не нужно — следующий запуск назначается по тексту.
             # Таймеры больше не учитываем: цикл фиксированный, 24 часа.
-        return "⚠️ кнопка «Бонус» не найдена; следующая проверка через 24 часа", config.bonus_interval_seconds
+        return "⚠️ кнопка «Бонус» не найдена; следующая проверка через 30 минут", config.bonus_retry_seconds
     except FloodWaitError as exc:
         raise SafetyBlockError(
             "временный спам-блок",
