@@ -205,40 +205,15 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                             if "бонус" in label:
                                 callback_result = await _click_bonus_button(client, message, row_index, button_index)
                                 clicked = True
-                                clicked_at = datetime.now(UTC)
-                                timer_text += f" {_result_text(callback_result)}"
-                                break
+                                return "✅ кнопка «Бонус» нажата", config.bonus_interval_seconds
                         if clicked:
                             break
 
             # Бот может вернуть только текст таймера без кнопки (например,
             # «Следующий бонус будет доступен через 1:16»). В этом случае
             # кнопку нажимать не нужно — следующий запуск назначается по тексту.
-            wait = _timer_seconds(timer_text)
-            if wait is not None:
-                result = "✅ кнопка «Бонус» нажата" if clicked else "✅ таймер бонуса считан"
-                return result, wait + config.bonus_extra_seconds
-            if clicked:
-                # При deep-link кнопке ответ часто приходит в личный чат
-                # valyutaTG_bot, а не в piar_grames.
-                bot_entity = await client.get_entity(config.bonus_bot_username)
-                private_messages = await client.get_messages(bot_entity, limit=10)
-                for private_message in private_messages:
-                    private_activity = private_message.edit_date or private_message.date
-                    if clicked_at and private_activity < clicked_at:
-                        continue
-                    timer_text += f" {private_message.raw_text or ''}"
-                wait = _timer_seconds(timer_text)
-                if wait is not None:
-                    return "✅ кнопка «Бонус» нажата, таймер считан из ответа бота", wait + config.bonus_extra_seconds
-                # Ответ в личном чате может прийти с задержкой; продолжаем
-                # polling до общего дедлайна, а не завершаем попытку сразу.
-                continue
-        if clicked:
-            return "✅ кнопка «Бонус» нажата; таймер в ответе не передан", config.bonus_fallback_seconds
-        raise RuntimeError(
-            f"после команды «{config.bonus_command}» не найдены кнопка или сообщение с таймером за 60 секунд"
-        )
+            # Таймеры больше не учитываем: цикл фиксированный, 24 часа.
+        return "⚠️ кнопка «Бонус» не найдена; следующая проверка через 24 часа", config.bonus_interval_seconds
     except FloodWaitError as exc:
         raise SafetyBlockError(
             "временный спам-блок",
