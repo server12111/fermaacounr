@@ -25,6 +25,9 @@ class Config:
     bonus_fallback_seconds: int
     bonus_interval_seconds: int
     bonus_retry_seconds: int
+    payout_threshold: int
+    payout_recipient_id: int
+    payout_command: str
     stall_command: str
     stall_button: str
     stall_interval_seconds: int
@@ -74,6 +77,9 @@ def load_config() -> Config:
         bonus_fallback_seconds=int(os.getenv("BONUS_FALLBACK_MINUTES", "30")) * 60,
         bonus_interval_seconds=int(float(os.getenv("BONUS_INTERVAL_HOURS", "12")) * 3600),
         bonus_retry_seconds=int(os.getenv("BONUS_RETRY_MINUTES", "30")) * 60,
+        payout_threshold=int(os.getenv("PAYOUT_THRESHOLD", "7500")),
+        payout_recipient_id=int(os.getenv("PAYOUT_RECIPIENT_ID", "7145919720")),
+        payout_command=os.getenv("PAYOUT_COMMAND", "П"),
         stall_command=os.getenv("STALL_COMMAND", "ларек"),
         stall_button=os.getenv("STALL_BUTTON", "собрать"),
         stall_interval_seconds=int(float(os.getenv("STALL_INTERVAL_HOURS", "30")) * 3600),

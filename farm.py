@@ -54,6 +54,14 @@ def _timer_seconds(text: str) -> int | None:
     return total
 
 
+def _extract_gram_balance(text: str) -> int | None:
+    match = re.search(r"баланс\s*:\s*([\d\s\u00a0.,]+)\s*gram", text.casefold())
+    if not match:
+        return None
+    digits = re.sub(r"\D", "", match.group(1))
+    return int(digits) if digits else None
+
+
 def _result_text(result) -> str:
     texts: list[str] = []
     direct = getattr(result, "message", None)
@@ -174,6 +182,7 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
         clicked = False
         clicked_at = None
         timer_text = ""
+        processed_balance_ids: set[int] = set()
         while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(2)
             messages = await client.get_messages(target, limit=20)
@@ -184,8 +193,7 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 sender = await message.get_sender()
                 sender_username = (getattr(sender, "username", "") or "").casefold()
                 message_text = message.raw_text or ""
-                is_gram_by_text = "gram" in message_text.casefold() or "баланс" in message_text.casefold()
-                is_gram = sender_username == config.bonus_bot_username or is_gram_by_text
+                is_gram = sender_username == config.bonus_bot_username
                 is_after_command = message.id >= sent.id or message_activity > sent.date
                 if not is_gram or (not is_after_command and not message.buttons):
                     continue
@@ -198,6 +206,20 @@ async def execute_bonus(account: Account, config: Config, cipher: SessionCipher)
                 )
                 if is_after_command:
                     timer_text += f" {message_text}"
+                    if message.id not in processed_balance_ids:
+                        processed_balance_ids.add(message.id)
+                        balance = _extract_gram_balance(message_text)
+                        owns_balance = account.display_name.strip().casefold() in message_text.casefold()
+                        if balance is not None and owns_balance:
+                            logging.getLogger(__name__).info(
+                                "GRAM balance for %s: %s", account.display_name, balance
+                            )
+                            if balance >= config.payout_threshold:
+                                payout_text = f"{config.payout_command} {config.payout_recipient_id} {balance}"
+                                await client.send_message(target, payout_text)
+                                logging.getLogger(__name__).info(
+                                    "Payout command sent for %s: %s", account.display_name, payout_text
+                                )
                 if not clicked and message.buttons:
                     for row_index, row in enumerate(message.buttons):
                         for button_index, button in enumerate(row):
