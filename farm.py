@@ -323,7 +323,9 @@ class FarmScheduler:
                     account.next_run is None or datetime.fromisoformat(account.next_run) <= now
                 )
                 bonus_due = account.bonus_next_run is None or datetime.fromisoformat(account.bonus_next_run) <= now
-                stall_due = account.stall_next_run is None or datetime.fromisoformat(account.stall_next_run) <= now
+                stall_due = self.config.stall_enabled and (
+                    account.stall_next_run is None or datetime.fromisoformat(account.stall_next_run) <= now
+                )
                 if due:
                     asyncio.create_task(self.run_one(account.id), name=f"farm-account-{account.id}")
                     await asyncio.sleep(self.config.between_accounts_seconds)

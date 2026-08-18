@@ -17,6 +17,7 @@ class Config:
     target_chat: str
     farm_command: str
     farm_enabled: bool
+    stall_enabled: bool
     bonus_chat: str
     bonus_command: str
     bonus_bot_username: str
@@ -65,6 +66,7 @@ def load_config() -> Config:
         target_chat=os.getenv("TARGET_CHAT", "@VirusikChat"),
         farm_command=os.getenv("FARM_COMMAND", "ферма"),
         farm_enabled=os.getenv("FARM_ENABLED", "false").casefold() in {"1", "true", "yes", "on"},
+        stall_enabled=os.getenv("STALL_ENABLED", "false").casefold() in {"1", "true", "yes", "on"},
         bonus_chat=os.getenv("BONUS_CHAT", "https://t.me/piar_grames"),
         bonus_command=os.getenv("BONUS_COMMAND", "б"),
         bonus_bot_username=os.getenv("BONUS_BOT_USERNAME", "valyutaTG_bot").lstrip("@").casefold(),
