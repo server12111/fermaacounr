@@ -72,7 +72,7 @@ def load_config() -> Config:
         bonus_bot_username=os.getenv("BONUS_BOT_USERNAME", "valyutaTG_bot").lstrip("@").casefold(),
         bonus_extra_seconds=int(os.getenv("BONUS_EXTRA_MINUTES", "5")) * 60,
         bonus_fallback_seconds=int(os.getenv("BONUS_FALLBACK_MINUTES", "30")) * 60,
-        bonus_interval_seconds=int(float(os.getenv("BONUS_INTERVAL_HOURS", "24")) * 3600),
+        bonus_interval_seconds=int(float(os.getenv("BONUS_INTERVAL_HOURS", "12")) * 3600),
         bonus_retry_seconds=int(os.getenv("BONUS_RETRY_MINUTES", "30")) * 60,
         stall_command=os.getenv("STALL_COMMAND", "ларек"),
         stall_button=os.getenv("STALL_BUTTON", "собрать"),
