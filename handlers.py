@@ -194,6 +194,18 @@ def build_router(
         await _edit(callback, text, accounts_menu(accounts))
         await callback.answer()
 
+    @router.callback_query(F.data.startswith("accounts_page:"))
+    async def show_accounts_page(callback: CallbackQuery) -> None:
+        page = int(callback.data.split(":", 1)[1])
+        accounts = await db.list_accounts()
+        active = sum(account.enabled for account in accounts)
+        text = (
+            "<b>Аккаунты</b>\n"
+            f"{active} активных из {len(accounts)}. Новый аккаунт получит самый свободный чат."
+        )
+        await _edit(callback, text, accounts_menu(accounts, page))
+        await callback.answer()
+
     @router.callback_query(F.data.startswith("account:"))
     async def show_account(callback: CallbackQuery) -> None:
         account = await db.get_account(int(callback.data.split(":", 1)[1]))

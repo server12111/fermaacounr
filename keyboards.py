@@ -66,18 +66,35 @@ def order_started_menu(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def accounts_menu(accounts: list[Account]) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    for account in accounts:
+ACCOUNTS_PAGE_SIZE = 25
+
+
+def accounts_menu(accounts: list[Account], page: int = 0) -> InlineKeyboardMarkup:
+    # Telegram caps inline keyboards at 100 buttons; without paging, a large
+    # account list makes the whole edit_text call fail and the trailing
+    # "Добавить аккаунт"/"Главная" buttons never render at all.
+    start = page * ACCOUNTS_PAGE_SIZE
+    page_accounts = accounts[start:start + ACCOUNTS_PAGE_SIZE]
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for account in page_accounts:
         icon = "★" if account.role == "admin_controller" else ("●" if account.enabled else "○")
         chat = "служебный аккаунт" if account.role == "admin_controller" else (account.bonus_chat_title or "без чата")
-        builder.button(
+        rows.append([InlineKeyboardButton(
             text=f"{icon} {account.display_name} · {chat}", callback_data=f"account:{account.id}"
-        )
-    builder.button(text="＋ Добавить аккаунт", callback_data="add_account")
-    builder.button(text="⌂ Главная", callback_data="home")
-    builder.adjust(1)
-    return builder.as_markup()
+        )])
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="‹ Назад", callback_data=f"accounts_page:{page - 1}"))
+    if start + ACCOUNTS_PAGE_SIZE < len(accounts):
+        nav_row.append(InlineKeyboardButton(text="Вперёд ›", callback_data=f"accounts_page:{page + 1}"))
+    if nav_row:
+        rows.append(nav_row)
+
+    rows.append([InlineKeyboardButton(text="＋ Добавить аккаунт", callback_data="add_account")])
+    rows.append([InlineKeyboardButton(text="⌂ Главная", callback_data="home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def add_account_method_menu() -> InlineKeyboardMarkup:
