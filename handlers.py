@@ -42,7 +42,7 @@ from keyboards import (
     order_started_menu,
 )
 from states import AddAccount, AddChat, EngagementOrder
-from tdata_import import extract_tdata_batch, tdata_to_string_session
+from tdata_import import extract_import_batch, session_to_string_session, tdata_to_string_session
 
 
 class AdminOnlyMiddleware(BaseMiddleware):
@@ -584,8 +584,8 @@ def build_router(
         await state.set_state(AddAccount.tdata)
         await _edit(
             callback,
-            "<b>Импорт tdata</b>\nОтправьте один ZIP: внутри могут быть несколько "
-            "отдельных <code>tdata.zip</code>. Бот импортирует их по очереди. "
+            "<b>Импорт аккаунтов</b>\nОтправьте .session или общий ZIP с несколькими "
+            "файлами <code>.session</code> / <code>tdata.zip</code>. Бот импортирует их по очереди. "
             "Перед экспортом отключите локальный пароль Telegram Desktop. "
             "Временные файлы удаляются сразу после импорта.",
             cancel_menu(),
@@ -624,9 +624,11 @@ def build_router(
     async def receive_tdata(message: Message, state: FSMContext, bot: Bot) -> None:
         document = message.document
         filename = (document.file_name or "") if document else ""
-        if not document or not filename.casefold().endswith(".zip"):
+        is_zip = filename.casefold().endswith(".zip")
+        is_session = filename.casefold().endswith(".session")
+        if not document or not (is_zip or is_session):
             await message.answer(
-                "Нужен ZIP с одной tdata или несколькими вложенными tdata ZIP.",
+                "Нужен файл .session или ZIP с несколькими .session/tdata.zip.",
                 reply_markup=cancel_menu(),
             )
             return
@@ -643,16 +645,24 @@ def build_router(
         try:
             with tempfile.TemporaryDirectory(prefix="gram-farm-tdata-") as tmp:
                 root = Path(tmp)
-                archive = root / "accounts.zip"
+                archive = root / ("accounts.zip" if is_zip else filename)
                 await bot.download(document, destination=archive)
-                packages = extract_tdata_batch(archive, root / "unpacked")
+                if is_zip:
+                    packages = extract_import_batch(archive, root / "unpacked")
+                else:
+                    packages = [(archive.stem, "session", archive)]
 
-                for index, (source_name, tdata_path) in enumerate(packages, start=1):
+                for index, (source_name, package_kind, package_path) in enumerate(packages, start=1):
                     await status.edit_text(
                         f"⏳ Импортирую аккаунт {index}/{len(packages)}…"
                     )
                     try:
-                        session_string, me = await tdata_to_string_session(tdata_path)
+                        if package_kind == "tdata":
+                            session_string, me = await tdata_to_string_session(package_path)
+                        else:
+                            session_string, me = await session_to_string_session(
+                                package_path, config.api_id, config.api_hash
+                            )
                         display_name = " ".join(
                             part for part in [me.first_name, me.last_name] if part
                         ) or str(me.id)

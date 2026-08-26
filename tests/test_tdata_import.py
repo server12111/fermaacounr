@@ -3,7 +3,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tdata_import import extract_tdata_archive, extract_tdata_batch
+from tdata_import import extract_import_batch, extract_tdata_archive, extract_tdata_batch
 
 
 class TdataArchiveTests(unittest.TestCase):
@@ -53,3 +53,15 @@ class TdataBatchTests(unittest.TestCase):
                 target.writestr("tdata/key_data", b"key")
             found = extract_tdata_batch(archive, root / "out")
             self.assertEqual(len(found), 1)
+
+
+    def test_extracts_multiple_session_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outer = root / "sessions.zip"
+            with zipfile.ZipFile(outer, "w") as target:
+                target.writestr("account-1/main.session", b"sqlite")
+                target.writestr("account-2/main.session", b"sqlite")
+            found = extract_import_batch(outer, root / "out")
+            self.assertEqual(len(found), 2)
+            self.assertTrue(all(kind == "session" for _, kind, _ in found))

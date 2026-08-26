@@ -20,25 +20,29 @@ def extract_tdata_archive(archive: Path, destination: Path) -> Path:
     return candidates[0]
 
 
-def extract_tdata_batch(archive: Path, destination: Path) -> list[tuple[str, Path]]:
-    """Accept one tdata ZIP or an outer ZIP containing many tdata ZIP files."""
+def extract_import_batch(archive: Path, destination: Path) -> list[tuple[str, str, Path]]:
+    """Extract a ZIP containing tdata packages and/or Telethon .session files."""
     outer = destination / "outer"
     extract_tdata_archive_contents(archive, outer)
-
-    direct = _find_tdata_directories(outer)
-    nested_archives = sorted(
-        path for path in outer.rglob("*.zip") if path.is_file()
-    )
-    if direct and nested_archives:
-        raise ValueError("смешанный архив: оставьте либо папки tdata, либо вложенные ZIP")
-
-    if direct:
-        return [(path.parent.name if path.name.casefold() == "tdata" else path.name, path) for path in direct]
+    tdata_dirs = _find_tdata_directories(outer)
+    session_files = sorted(path for path in outer.rglob("*.session") if path.is_file())
+    nested_archives = sorted(path for path in outer.rglob("*.zip") if path.is_file())
+    if (tdata_dirs or session_files) and nested_archives:
+        raise ValueError("смешанный архив: положите аккаунты одного типа")
+    if tdata_dirs and session_files:
+        raise ValueError("смешанный архив: положите либо tdata, либо .session")
+    if tdata_dirs:
+        if len(tdata_dirs) > 100:
+            raise ValueError("за один раз можно импортировать не больше 100 аккаунтов")
+        return [(path.parent.name, "tdata", path) for path in tdata_dirs]
+    if session_files:
+        if len(session_files) > 100:
+            raise ValueError("за один раз можно импортировать не больше 100 аккаунтов")
+        return [(path.stem, "session", path) for path in session_files]
     if not nested_archives:
-        raise ValueError("не найдены папки tdata или вложенные ZIP-архивы")
+        raise ValueError("не найдены папки tdata, .session или вложенные ZIP-архивы")
     if len(nested_archives) > 100:
         raise ValueError("за один раз можно импортировать не больше 100 аккаунтов")
-
     total_nested_size = 0
     for nested in nested_archives:
         try:
@@ -47,17 +51,24 @@ def extract_tdata_batch(archive: Path, destination: Path) -> list[tuple[str, Pat
         except zipfile.BadZipFile as exc:
             raise ValueError(f"{nested.name}: повреждённый вложенный ZIP") from exc
         if total_nested_size > MAX_EXTRACTED_BYTES:
-            raise ValueError("суммарный размер распакованных tdata больше 200 МБ")
-
-    result: list[tuple[str, Path]] = []
+            raise ValueError("суммарный размер распакованных аккаунтов больше 200 МБ")
+    result = []
     for index, nested in enumerate(nested_archives, start=1):
         target = destination / "accounts" / str(index)
-        try:
-            path = extract_tdata_archive(nested, target)
-        except ValueError as exc:
-            raise ValueError(f"{nested.name}: {exc}") from exc
-        result.append((nested.stem, path))
+        extract_tdata_archive_contents(nested, target)
+        dirs = _find_tdata_directories(target)
+        sessions = sorted(path for path in target.rglob("*.session") if path.is_file())
+        if dirs and sessions or len(dirs) + len(sessions) != 1:
+            raise ValueError(f"{nested.name}: нужен ровно один tdata или один .session")
+        if dirs:
+            result.append((nested.stem, "tdata", dirs[0]))
+        else:
+            result.append((sessions[0].stem, "session", sessions[0]))
     return result
+
+
+def extract_tdata_batch(archive: Path, destination: Path) -> list[tuple[str, Path]]:
+    return [(name, path) for name, kind, path in extract_import_batch(archive, destination) if kind == "tdata"]
 
 
 def extract_tdata_archive_contents(archive: Path, destination: Path) -> None:
@@ -116,5 +127,23 @@ async def tdata_to_string_session(tdata_path: Path):
             raise ValueError("сессия tdata завершена или не авторизована")
         me = await client.get_me()
         return client.session.save(), me
+    finally:
+        await client.disconnect()
+
+
+async def session_to_string_session(session_path: Path, api_id: int, api_hash: str):
+    """Validate a Telethon SQLite .session and convert it to encrypted StringSession data."""
+    try:
+        from telethon import TelegramClient
+        from telethon.sessions import StringSession
+    except ImportError as exc:
+        raise RuntimeError("не установлена зависимость Telethon") from exc
+    client = TelegramClient(str(session_path), api_id, api_hash)
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            raise ValueError(".session завершена или не авторизована")
+        me = await client.get_me()
+        return StringSession.save(client.session), me
     finally:
         await client.disconnect()
