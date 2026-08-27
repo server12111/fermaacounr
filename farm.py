@@ -264,7 +264,7 @@ async def _is_expected_bot_response(message, sent, expected_username: str = "") 
 
 
 async def grant_full_admin(service: Account, worker: Account, chat_reference: str, config: Config, cipher: SessionCipher) -> str:
-    """Служебный аккаунт выдаёт рабочему полные админ-права в его чате."""
+    """Служебный аккаунт выдаёт рабочему права на отправку и удаление сообщений в чате."""
     service_client = TelegramClient(StringSession(cipher.decrypt(service.session)), config.api_id, config.api_hash)
     worker_client = TelegramClient(StringSession(cipher.decrypt(worker.session)), config.api_id, config.api_hash)
     try:
@@ -301,15 +301,12 @@ async def grant_full_admin(service: Account, worker: Account, chat_reference: st
             raise RuntimeError("нет access_hash рабочего участника")
         worker_entity = InputUser(service_view.id, service_view.access_hash)
         rights = ChatAdminRights(
-            change_info=True, post_messages=True, edit_messages=True, delete_messages=True,
-            ban_users=True, invite_users=True, pin_messages=True, add_admins=True,
-            anonymous=False, manage_call=True, other=True, manage_topics=True,
-            post_stories=True, edit_stories=True, delete_stories=True,
+            post_messages=True, delete_messages=True,
         )
         await service_client(functions.channels.EditAdminRequest(
             channel=service_chat, user_id=worker_entity, admin_rights=rights, rank="Farm worker"
         ))
-        return "✅ полные админ-права выданы"
+        return "✅ права на отправку и удаление сообщений выданы"
     finally:
         await worker_client.disconnect()
         await service_client.disconnect()
