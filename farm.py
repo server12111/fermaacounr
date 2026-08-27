@@ -32,7 +32,8 @@ from db import Account, Database, Order
 
 
 class SafetyBlockError(RuntimeError):
-    """Telegram ограничил аккаунт; автоматическое возобновление запрещено."""
+    """Telegram ограничил аккаунт. С известным сроком (seconds) — авторетрай по таймеру;
+    без срока (бан/PeerFlood/деактивация) — карантин и обязательная ручная проверка."""
 
     def __init__(self, label: str, message: str, seconds: int | None = None) -> None:
         super().__init__(message)
@@ -879,7 +880,12 @@ class FarmScheduler:
                 status = _safety_status(exc, now)
                 if admin_status and admin_status.startswith("⚠️"):
                     status = f"{admin_status}; {status}"
-                await self.db.quarantine(account_id, status)
+                if exc.seconds is not None:
+                    await self.db.set_result(
+                        account_id, last_run=now, next_run=now + timedelta(seconds=exc.seconds), status=status
+                    )
+                else:
+                    await self.db.quarantine(account_id, status)
             except Exception as exc:
                 status = f"❌ {type(exc).__name__}: {exc}"
                 if admin_status and admin_status.startswith("⚠️"):
@@ -933,7 +939,10 @@ class FarmScheduler:
                 status = _safety_status(exc, now)
                 if admin_status and admin_status.startswith("⚠️"):
                     status = f"{admin_status}; {status}"
-                await self.db.quarantine(account_id, status)
+                if exc.seconds is not None:
+                    await self.db.set_bonus_result(account_id, next_run=now + timedelta(seconds=exc.seconds), status=status)
+                else:
+                    await self.db.quarantine(account_id, status)
             except Exception as exc:
                 status = f"❌ бонус: {type(exc).__name__}: {exc}"
                 if admin_status and admin_status.startswith("⚠️"):
@@ -971,7 +980,10 @@ class FarmScheduler:
                 status = _safety_status(exc, now)
                 if admin_status and admin_status.startswith("⚠️"):
                     status = f"{admin_status}; {status}"
-                await self.db.quarantine(account_id, status)
+                if exc.seconds is not None:
+                    await self.db.set_stall_result(account_id, next_run=now + timedelta(seconds=exc.seconds), status=status)
+                else:
+                    await self.db.quarantine(account_id, status)
             except Exception as exc:
                 status = f"❌ ларёк: {type(exc).__name__}: {exc}"
                 if admin_status and admin_status.startswith("⚠️"):
